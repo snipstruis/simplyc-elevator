@@ -32,7 +32,7 @@ class Timing (Chart):
 		
 	def define (self, world):
 		self.channel (world.elevator.acc,      red, -1, 1, 50)
-		self.channel (world.elevator.speed,    yellow, -1, 1, 50)
+		self.channel (world.elevator.speed,    yellow, -0.01, 0.01, 50)
 		self.channel (world.elevator.height,   white, 0, 5, 200)
 		self.channel (world.elevator.shouldBreak,green)
 		self.channel (world.elevator.going,      blue)

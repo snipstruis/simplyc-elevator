@@ -29,7 +29,7 @@ from SimPyLC import *
 class Elevator (Module):
 	def __init__ (self, name):
 		Module.__init__ (self, name)
-		self.page ('internal data')
+		self.page ('internal data (READ-ONLY)')
 		self.group ('state', True)
 		self.reqUp      = Marker()
 		self.reqDown    = Marker()
@@ -42,54 +42,102 @@ class Elevator (Module):
 		self.stopped    = Marker()
 		self.atTopSpeed = Marker()
 		self.stopTimer  = Timer()
-		self.proximity  = Register(0.0)
 		self.group ('physics', True)
 		self.height     = Register(3.0)
 		self.speed      = Register(0.0)
 		self.acc        = Register(0.0)
+		self.group ('button state', True)
+		self.goto0 = Register()
+		self.goto1 = Register()
+		self.goto2 = Register()
+		self.goto3 = Register()
+		self.goto4 = Register()
+		self.goto5 = Register()
+		self.up1   = Register()
+		self.up2   = Register()
+		self.up3   = Register()
+		self.up4   = Register()
+		self.down1 = Register()
+		self.down2 = Register()
+		self.down3 = Register()
+		self.down4 = Register()
 		self.group ('misc', True)
 		self.run = Runner ()
 
 	def input (self, world):
+		self.goto0.set(1,world.ctrl.goto0 or world.ctrl.up0)
+		self.goto1.set(1,world.ctrl.goto1)
+		self.goto2.set(1,world.ctrl.goto2)
+		self.goto3.set(1,world.ctrl.goto3)
+		self.goto4.set(1,world.ctrl.goto4)
+		self.goto5.set(1,world.ctrl.goto5 or world.ctrl.down5)
+		
+		self.down1.set(1,world.ctrl.down1)
+		self.down2.set(1,world.ctrl.down2)
+		self.down3.set(1,world.ctrl.down3)
+		self.down4.set(1,world.ctrl.down4)
+		
+		self.up1.set(  1,world.ctrl.up1)
+		self.up2.set(  1,world.ctrl.up2)
+		self.up3.set(  1,world.ctrl.up3)
+		self.up4.set(  1,world.ctrl.up4)
+		
+		self.goto0.set(0, self.stopped and self.height<0.1 )
+		self.goto1.set(0, self.stopped and self.height<1.1 and self.height>0.9 )
+		self.goto2.set(0, self.stopped and self.height<2.1 and self.height>1.9 )
+		self.goto3.set(0, self.stopped and self.height<3.1 and self.height>2.9 )
+		self.goto4.set(0, self.stopped and self.height<4.1 and self.height>3.9 )
+		self.goto5.set(0, self.stopped                     and self.height>4.9 )
+		
+		self.down1.set(0, self.goingDown and self.stopped and self.height<1.1 and self.height>0.9 )
+		self.down2.set(0, self.goingDown and self.stopped and self.height<2.1 and self.height>1.9 )
+		self.down3.set(0, self.goingDown and self.stopped and self.height<3.1 and self.height>2.9 )
+		self.down4.set(0, self.goingDown and self.stopped and self.height<4.1 and self.height>3.9 )
+		
+		self.up1.set(  0, self.goingUp and self.stopped and self.height<1.1 and self.height>0.9 )
+		self.up2.set(  0, self.goingUp and self.stopped and self.height<2.1 and self.height>1.9)
+		self.up3.set(  0, self.goingUp and self.stopped and self.height<3.1 and self.height>2.9)
+		self.up4.set(  0, self.goingUp and self.stopped and self.height<4.1 and self.height>3.9)
+
+	def sweep (self):
 		# if no button is pressed, it is idle
 		self.idle.mark (not
-		 (  world.ctrl.goto0 or world.ctrl.up0                
-		 or world.ctrl.goto1 or world.ctrl.up1 or world.ctrl.down1
-		 or world.ctrl.goto2 or world.ctrl.up2 or world.ctrl.down2
-		 or world.ctrl.goto3 or world.ctrl.up3 or world.ctrl.down3
-		 or world.ctrl.goto4 or world.ctrl.up4 or world.ctrl.down4
-		 or world.ctrl.goto5                   or world.ctrl.down5 ))
-		 
+		 (  self.goto0               
+		 or self.goto1 or self.up1 or self.down1
+		 or self.goto2 or self.up2 or self.down2
+		 or self.goto3 or self.up3 or self.down3
+		 or self.goto4 or self.up4 or self.down4
+		 or self.goto5 ))
+			
 		# if the button is pressed above the current location of the elevator, the elevator is requested up
 		self.reqUp.mark(
-			(self.height < 4.9 and (world.ctrl.goto5 or world.ctrl.down5))
-		 or (self.height < 3.9 and (world.ctrl.goto4 or world.ctrl.down4 or world.ctrl.up4 ))
-		 or (self.height < 2.9 and (world.ctrl.goto3 or world.ctrl.down3 or world.ctrl.up3 ))
-		 or (self.height < 1.9 and (world.ctrl.goto2 or world.ctrl.down2 or world.ctrl.up2 ))
-		 or (self.height < 0.9 and (world.ctrl.goto1 or world.ctrl.down1 or world.ctrl.up1 )))
+			(self.height < 4.9 and (self.goto5))
+		 or (self.height < 3.9 and (self.goto4 or self.down4 or self.up4 ))
+		 or (self.height < 2.9 and (self.goto3 or self.down3 or self.up3 ))
+		 or (self.height < 1.9 and (self.goto2 or self.down2 or self.up2 ))
+		 or (self.height < 0.9 and (self.goto1 or self.down1 or self.up1 )))
 		 
 		# if the button is pressed below the current location of the elevator, the elevator is requested down
 		self.reqDown.mark(
-			(self.height > 0.1 and (world.ctrl.goto0                     or world.ctrl.up0))
-		 or (self.height > 1.1 and (world.ctrl.goto1 or world.ctrl.down1 or world.ctrl.up1 ))
-		 or (self.height > 2.1 and (world.ctrl.goto2 or world.ctrl.down2 or world.ctrl.up2 ))
-		 or (self.height > 3.1 and (world.ctrl.goto3 or world.ctrl.down3 or world.ctrl.up3 ))
-		 or (self.height > 4.1 and (world.ctrl.goto4 or world.ctrl.down4 or world.ctrl.up4 )))
+			(self.height > 0.1 and (self.goto0))
+		 or (self.height > 1.1 and (self.goto1 or self.down1 or self.up1 ))
+		 or (self.height > 2.1 and (self.goto2 or self.down2 or self.up2 ))
+		 or (self.height > 3.1 and (self.goto3 or self.down3 or self.up3 ))
+		 or (self.height > 4.1 and (self.goto4 or self.down4 or self.up4 )))
 		
 		# if halfway to a floor where the button in the same direction is pressed, the elevator should stop
 		self.shouldBreak.mark(
-			(self.goingDown and self.height > 0 and self.height < 0.2 and (world.ctrl.goto0 or world.ctrl.up0))
-		 or (self.goingDown and self.height > 1 and self.height < 1.2 and (world.ctrl.goto1 or world.ctrl.down1))
-		 or (self.goingDown and self.height > 2 and self.height < 2.2 and (world.ctrl.goto2 or world.ctrl.down2))
-		 or (self.goingDown and self.height > 3 and self.height < 3.2 and (world.ctrl.goto3 or world.ctrl.down3))
-		 or (self.goingDown and self.height > 4 and self.height < 4.2 and (world.ctrl.goto4 or world.ctrl.down4))
-		 or (self.goingUp   and self.height < 1 and self.height > 0.8 and (world.ctrl.goto1 or world.ctrl.up1))
-		 or (self.goingUp   and self.height < 2 and self.height > 1.8 and (world.ctrl.goto2 or world.ctrl.up2))
-		 or (self.goingUp   and self.height < 3 and self.height > 2.8 and (world.ctrl.goto3 or world.ctrl.up3))
-		 or (self.goingUp   and self.height < 4 and self.height > 3.8 and (world.ctrl.goto4 or world.ctrl.up4))
-		 or (self.goingUp   and self.height < 5 and self.height > 4.8 and (world.ctrl.goto5 or world.ctrl.down5)))
-	
-	def sweep (self):
+			(self.goingDown and self.height > 0 and self.height < 0.2 and  self.goto0)
+		 or (self.goingDown and self.height > 1 and self.height < 1.2 and (self.goto1 or self.down1))
+		 or (self.goingDown and self.height > 2 and self.height < 2.2 and (self.goto2 or self.down2))
+		 or (self.goingDown and self.height > 3 and self.height < 3.2 and (self.goto3 or self.down3))
+		 or (self.goingDown and self.height > 4 and self.height < 4.2 and (self.goto4 or self.down4))
+		 or (self.goingUp   and self.height < 1 and self.height > 0.8 and (self.goto1 or self.up1))
+		 or (self.goingUp   and self.height < 2 and self.height > 1.8 and (self.goto2 or self.up2))
+		 or (self.goingUp   and self.height < 3 and self.height > 2.8 and (self.goto3 or self.up3))
+		 or (self.goingUp   and self.height < 4 and self.height > 3.8 and (self.goto4 or self.up4))
+		 or (self.goingUp   and self.height < 5 and self.height > 4.8 and  self.goto5))
+		
 		self.goingUp.mark((not self.goingDown) and self.reqUp)
 		self.goingDown.mark((not self.goingUp) and self.reqDown)
 		
